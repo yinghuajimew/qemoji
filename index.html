@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ小表情转群/昵称代码 0.5</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 10px;
+            margin: 0;
+            color: #333;
+            /* 修复：移除 overflow: hidden，允许页面自由滑动 */
+        }
+        .container {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            max-width: 500px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            /* 修复：移除固定高度和溢出隐藏，让容器根据内容自动撑高 */
+            min-height: 80vh; 
+            position: relative;
+        }
+        
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        h2 {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 700;
+        }
+        .preset-trigger {
+            font-size: 14px;
+            color: #0099ff;
+            cursor: pointer;
+            padding: 6px 12px;
+            background: #e6f4ff;
+            border-radius: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        .preset-trigger:active {
+            background: #cce9ff;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #444;
+        }
+        .hint {
+            font-weight: normal;
+            color: #888;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+            background: #fafafa;
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #0099ff;
+            background: #fff;
+        }
+        
+        button.action-btn {
+            width: 100%;
+            padding: 12px;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 5px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+        button.action-btn:active { opacity: 0.8; }
+        button.generate-btn { background-color: #0099ff; }
+        button.copy-all-btn { background-color: #28a745; display: none; margin-top: 10px; }
+
+        /* --- 结果容器 --- */
+        .result-area {
+            margin-top: 15px;
+            border: 1px solid #eee;
+            background-color: #fcfcfc;
+            padding: 8px;
+            border-radius: 8px;
+            
+            /* 核心修改：设置一个固定高度（屏幕高度的55%），保持内部滚动 */
+            /* 这样页面很长时，你可以滑动页面；想看结果时，可以滑动这个区域 */
+            height: 55vh; 
+            min-height: 300px; 
+            
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .result-item {
+            background: #fff;
+            border: 1px solid #f0f0f0;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            flex-shrink: 0; /* 防止子元素被挤压 */
+        }
+        .code-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            margin-right: 10px;
+            min-width: 0;
+        }
+        .code-label { font-size: 12px; color: #999; margin-bottom: 3px; }
+        .code-display {
+            font-family: monospace;
+            color: #d63384;
+            font-size: 15px;
+            letter-spacing: 0.5px;
+            word-break: break-all;
+        }
+        .copy-item-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .usage-note {
+            font-size: 12px;
+            color: #666;
+            margin-top: 15px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+        .usage-note strong { color: #333; }
+        .usage-note ul { margin: 5px 0 0 0; padding-left: 18px; }
+        .usage-note li { margin-bottom: 2px; }
+
+        /* --- 侧边栏（抽屉）样式 --- */
+        /* 修复：改为 fixed 定位，确保始终覆盖在屏幕最上方 */
+        .drawer-overlay {
+            position: fixed; /* 改为 fixed */
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+        .drawer-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .drawer-panel {
+            position: fixed; /* 改为 fixed */
+            top: 0; bottom: 0; right: 0;
+            width: 75%; 
+            max-width: 320px;
+            background: white;
+            z-index: 2001;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer-panel.active {
+            transform: translateX(0);
+        }
+
+        .drawer-header {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+            background: #fff;
+        }
+        .close-drawer {
+            border: none;
+            background: #f5f5f5;
+            color: #666;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .preset-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        .preset-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f9f9f9;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.1s;
+        }
+        .preset-item:active {
+            background-color: #f0f7ff;
+        }
+        .preset-name { 
+            font-size: 15px; 
+            color: #333; 
+            margin-bottom: 4px;
+        }
+        .preset-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+        .id-badge {
+            background: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-row">
+        <h2>QQ小表情群/昵称</h2>
+        <div class="preset-trigger" onclick="toggleDrawer(true)">
+            <span>📂 选小表情</span>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="pkgId">小表情ID</label>
+        <input type="number" id="pkgId" placeholder="输入ID，如: 66" />
+    </div>
+
+    <div class="form-group">
+        <label for="count">生成数量<span class="hint">可自动填充(默认50)</span></label>
+        <input type="number" id="count" value="50" min="1" max="200" />
+    </div>
+
+    <button class="action-btn generate-btn" onclick="generateCodes()">生成转换代码</button>
+    <button id="copyAllBtn" class="action-btn copy-all-btn">复制全部</button>
+
+    <!-- 结果区域 -->
+    <div class="result-area" id="resultArea">
+        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%; color:#aaa;">
+            <div style="font-size:40px; margin-bottom:10px;">🤔</div>
+            <div>输入ID或点击右上角选择小表情</div>
+        </div>
+    </div>
+
+    <div class="usage-note">
+    <strong>使用说明：</strong><br>
+            1. <strong>获取ID：</strong>分享小表情链接，查看链接参数中的 <code>id=xxxxx</code> 即为ID。<br>
+            2. 使用方法：仅限手机端（Android/iOS）。进入【群设置】，在修改<strong>群聊名称</strong>或<strong>群内昵称</strong>时使用。<br>
+            3. 粘贴生效：粘贴代码后若显示乱码或空白属正常现象，保存后稍等片刻即可正常显示。<br>
+<strong>版本兼容：</strong>QQ 8.9.68 及以上版本可能导致部分代码失效，建议优先使用旧版本尝试。<br>
+            4. <strong>数量限制：</strong>单组 ID 包含的表情数量不固定，具体上限请自行测试。<br>
+            5. <strong>保存失败：</strong>若混合使用多个表情导致无法保存，请尝试在表情代码之间添加空格。<br>
+            6. 命名说明：部分表情作者未定义具体名称（显示为“小表情”或重复命名），不影响代码的正常使用。
+    </div>
+</div>
+
+<!-- 侧边栏结构 (已改为 Fixed 定位) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+<div class="drawer-panel" id="drawerPanel">
+    <div class="drawer-header">
+        <span>选择小表情</span>
+        <button class="close-drawer" onclick="toggleDrawer(false)">×</button>
+    </div>
+    <ul class="preset-list" id="presetList">
+        <!-- JS填充 -->
+    </ul>
+</div>
+
+<script>
+    const presets = [
+        { name: "夸张小黄脸（绝版）", id: 8, count: 25 },
+        { name: "加强小黄脸", id: 4, count: 20 },
+        { name: "小黄脸明星范儿", id: 18, count: 27 },
+        { name: "20年回忆小表情", id: 68, count: 35 },
+        { name: "爪子小表情", id: 17, count: 40 },
+        { name: "猫爪小表情", id: 67, count: 29 },
+        { name: "动物爪子小表情", id: 31, count: 45 },
+        { name: "女神节(1)小表情", id: 64, count: 32 },
+        { name: "女神节(2)小表情", id: 63, count: 42 },
+        { name: "春节小表情", id: 35, count: 41 },
+        { name: "新春祝福小表情", id: 36, count: 40 },
+        { name: "欢乐“双旦”节", id: 34, count: 40 },
+        { name: "愚人节小表情", id: 27, count: 41 },
+        { name: "圣诞节小表情", id: 58, count: 41 },
+        { name: "圣诞专属小表情", id: 56, count: 33 },
+        { name: "Up喵小表情", id: 21, count: 40 },
+        { name: "嗷大喵小表情", id: 11, count: 40 },
+        { name: "果叽果叽小表情", id: 66, count: 40 },
+        { name: "天使恶魔小表情", id: 38, count: 42 },
+        { name: "姜小虎小表情", id: 29, count: 41 },
+        { name: "暴走漫画小表情", id: 16, count: 40 },
+        { name: "猫咪小表情", id: 26, count: 41 },
+        { name: "冷兔宝宝小表情", id: 60, count: 40 },
+        { name: "兔子小表情", id: 32, count: 41 },
+        { name: "王尼玛小表情", id: 33, count: 40 },
+        { name: "亲亲小狗子", id: 37, count: 41 },
+        { name: "聊天框炸弹", id: 39, count: 41 },
+        { name: "甜到牙疼", id: 40, count: 41 },
+        { name: "幺气十足激情四射", id: 41, count: 22 },
+        { name: "我是一个小插座", id: 43, count: 40 },
+        { name: "骚动的手", id: 48, count: 40 },
+        { name: "小肚皮萌萌哒", id: 50, count: 40 },
+        { name: "小肚皮", id: 62, count: 40 },
+        { name: "咸鱼之王", id: 51, count: 41 },
+        { name: "双十一方块狗", id: 53, count: 41 },
+        { name: "双十一清空购物车", id: 23, count: 40 },
+        { name: "金猪先生", id: 57, count: 41 },
+        { name: "小纯洁小表情", id: 7, count: 40 },
+        { name: "汪蛋小表情", id: 6, count: 40 },
+        { name: "星际迷航", id: 19, count: 20 },
+        { name: "牛牛和爱丽丝", id: 20, count: 40 },
+        { name: "冷兔软糖", id: 22, count: 44 },
+        { name: "冷兔小表情", id: 25, count: 47 },
+        { name: "小犬呆呆宝", id: 30, count: 41 },
+        { name: "魔鬼猫", id: 42, count: 40 },
+        { name: "软萌jo", id: 70, count: 21 },
+        { name: "搞怪小表情", id: 28, count: 43 },
+        { name: "酷炫文字小表情", id: 14, count: 40 },
+        { name: "炫彩文字小表情", id: 52, count: 40 },
+        { name: "跳动的文字", id: 49, count: 42 },
+        { name: "文字小表情", id: 24, count: 41 },
+        { name: "小方块(名字丢失)", id: 1, count: 20 }
+    ];
+
+    const listEl = document.getElementById('presetList');
+    presets.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'preset-item';
+        li.innerHTML = `
+            <span class="preset-name">${p.name}</span>
+            <div class="preset-meta">
+                <span class="id-badge">ID: ${p.id}</span>
+                <span>包含 ${p.count} 个</span>
+            </div>
+        `;
+        li.onclick = () => {
+            selectPreset(p.id, p.count);
+        };
+        listEl.appendChild(li);
+    });
+
+    function toggleDrawer(show) {
+        const overlay = document.getElementById('drawerOverlay');
+        const panel = document.getElementById('drawerPanel');
+        if (show) {
+            overlay.classList.add('active');
+            panel.classList.add('active');
+            // 打开侧边栏时禁止背景滚动
+            document.body.style.overflow = 'hidden';
+        } else {
+            overlay.classList.remove('active');
+            panel.classList.remove('active');
+            // 关闭侧边栏恢复滚动
+            document.body.style.overflow = '';
+        }
+    }
+
+    function selectPreset(id, count) {
+        document.getElementById('pkgId').value = id;
+        document.getElementById('count').value = count;
+        toggleDrawer(false);
+        generateCodes(); 
+    }
+
+    function generateCodes() {
+        const pkgIdStr = document.getElementById('pkgId').value;
+        const countStr = document.getElementById('count').value;
+        const resultArea = document.getElementById('resultArea');
+        const copyAllBtn = document.getElementById('copyAllBtn');
+
+        if (!pkgIdStr) {
+            alert('请输入小表情ID');
+            return;
+        }
+
+        const pkgId = parseInt(pkgIdStr);
+        const count = parseInt(countStr) || 50;
+        
+        resultArea.innerHTML = '';
+        
+        const prefix = "<\$\u00FF\u0100";
+        const suffix = ">";
+        
+        const allCodesArray = [];
+
+        for (let i = 1; i <= count; i++) {
+            try {
+                const charPkg = String.fromCharCode(pkgId);
+                const charEmo = String.fromCharCode(i);
+                const finalCode = prefix + charPkg + charEmo + suffix;
+                
+                allCodesArray.push(finalCode);
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'result-item';
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'code-info';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'code-label';
+                labelSpan.textContent = `表情 #${i}`;
+
+                const codeSpan = document.createElement('span');
+                codeSpan.className = 'code-display';
+                codeSpan.textContent = finalCode; 
+
+                infoDiv.appendChild(labelSpan);
+                infoDiv.appendChild(codeSpan);
+
+                const btn = document.createElement('button');
+                btn.className = 'copy-item-btn';
+                btn.textContent = '复制';
+                btn.onclick = function() {
+                    copyToClipboard(finalCode, btn);
+                };
+
+                itemDiv.appendChild(infoDiv);
+                itemDiv.appendChild(btn);
+                resultArea.appendChild(itemDiv);
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        if (allCodesArray.length > 0) {
+            copyAllBtn.style.display = 'block';
+            copyAllBtn.onclick = function() {
+                const allText = allCodesArray.join('\n');
+                copyToClipboard(allText, copyAllBtn, "已复制全部！");
+            };
+        } else {
+            copyAllBtn.style.display = 'none';
+        }
+    }
+
+    function copyToClipboard(text, btnElement, successMsg = "已复制") {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            const originalText = btnElement.textContent;
+            btnElement.textContent = successMsg;
+            btnElement.disabled = true;
+            setTimeout(() => {
+                btnElement.textContent = originalText;
+                btnElement.disabled = false;
+            }, 1000);
+        } catch (err) {
+            alert('复制失败，请手动复制');
+        }
+        document.body.removeChild(textarea);
+    }
+</script>
+
+</body>
+</html>
